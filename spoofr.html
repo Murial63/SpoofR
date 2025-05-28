@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpoofR Game Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            overscroll-behavior-y: contain;
+        }
+        .player-card { 
+            transition: all 0.3s ease-in-out; 
+            border: 1px solid #e5e7eb;
+        }
+        .player-eliminated { 
+            background-color: #fee2e2 !important;
+            opacity: 0.7; 
+            transform: scale(0.95);
+        }
+        .player-eliminated .player-icon { filter: grayscale(100%); }
+
+        .current-player-input { 
+            border: 2px solid #3b82f6;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+            transform: scale(1.03);
+        }
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.6); display: flex;
+            justify-content: center; align-items: center; z-index: 1000;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease; padding: 1rem;
+        }
+        .modal.active { opacity: 1; pointer-events: auto; }
+        .modal-content { 
+            background-color: white; 
+            padding: 1.5rem 2rem;
+            border-radius: 0.75rem;
+            text-align: center; 
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+            width: 90%;
+            max-width: 400px;
+        }
+        .game-log-entry { 
+            border-bottom: 1px solid #f3f4f6;
+            padding-bottom: 0.5rem; 
+            margin-bottom: 0.5rem; 
+            font-size: 0.8rem;
+        }
+        .game-log-entry:last-child { border-bottom: none; }
+
+        .btn {
+            font-weight: 600;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            cursor: pointer;
+        }
+        .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); }
+        .btn-primary { background-color: #3b82f6; color: white; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-secondary { background-color: #6b7280; color: white; }
+        .btn-secondary:hover { background-color: #4b5563; }
+        .btn-action { background-color: #10b981; color: white; }
+        .btn-action:hover { background-color: #059669; }
+        .btn-resolve { background-color: #8b5cf6; color: white; }
+        .btn-resolve:hover { background-color: #7c3aed; }
+        .btn-sound { background-color: #f59e0b; color:white; padding: 0.5rem 1rem; font-size: 0.875rem; }
+        .btn-sound.off { background-color: #d1d5db; color: #4b5563; }
+        .toggle-switch {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0.5rem; background-color: #f3f4f6; border-radius: 0.375rem; margin-top: 0.5rem;
+        }
+        .toggle-switch span { font-size: 0.875rem; color: #374151; margin-right: 0.5rem; }
+        .toggle-switch button {
+            padding: 0.25rem 0.75rem; font-size: 0.75rem; border-radius: 0.25rem;
+        }
+
+
+        .input-field, .name-input-field {
+            margin-top: 0.25rem; display: block; width: 100%;
+            padding: 0.65rem 0.75rem; border: 1px solid #d1d5db;
+            border-radius: 0.375rem; box-shadow: inset 0 1px 2px 0 rgba(0,0,0,0.05);
+            outline: none;
+        }
+        .input-field:focus, .name-input-field:focus { 
+            border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3); 
+        }
+        .label-text { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; }
+
+        .player-icon svg { width: 3rem; height: 3rem; margin: 0 auto 0.5rem auto; }
+        
+        .screen { display: none; animation: fadeIn 0.5s ease-in-out; }
+        .screen.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 min-h-screen flex items-center justify-center p-2 sm:p-4">
+
+    <div id="appContainer" class="w-full max-w-md bg-white p-4 sm:p-6 rounded-xl shadow-2xl">
+        
+        <div class="flex justify-end mb-2">
+            <button id="soundToggleBtn" class="btn btn-sound off">Sound 🔊 Off</button>
+        </div>
+
+        <div id="homeScreen" class="screen active text-center space-y-8 py-8">
+            <img src="https://placehold.co/100x100/3b82f6/ffffff?text=S!" alt="SpoofR Logo" class="mx-auto rounded-full shadow-lg">
+            <h1 class="text-4xl font-bold text-blue-600">SpoofR</h1>
+            <p class="text-gray-600 text-lg">The ultimate game of bluff and luck!</p>
+            <button id="initGameBtn" class="btn btn-primary w-full text-lg">Start New Game</button>
+        </div>
+        
+        <div id="setupScreen" class="screen space-y-3"> 
+            <h2 class="text-2xl font-semibold mb-2 text-center text-gray-700">Game Setup</h2>
+            <div>
+                <label for="numPlayers" class="label-text">Number of Players (2-8):</label>
+                <input type="number" id="numPlayers" name="numPlayers" min="2" max="8" value="3" class="input-field">
+            </div>
+            
+            <div id="playerNamesArea" class="space-y-1 mt-2 max-h-28 overflow-y-auto"> 
+            </div>
+
+            <div class="mt-2">
+                <label for="escalationTrigger" class="label-text">Normal Escalation Trigger (N safe rounds):</label>
+                <input type="number" id="escalationTrigger" name="escalationTrigger" min="1" max="5" value="2" class="input-field">
+            </div>
+            <div>
+                <label for="gameModeSelect" class="label-text">Game Mode:</label>
+                <select id="gameModeSelect" class="input-field">
+                    <option value="lastPlayerWins">Last Player Wins</option>
+                    <option value="lastPlayerLoses">Last Player Loses</option>
+                </select>
+            </div>
+             <div class="toggle-switch">
+                <span class="label-text">Announce Guesses Live?</span>
+                <button id="announceGuessesToggleBtn" class="btn btn-sound off">Off</button>
+            </div>
+            <div class="toggle-switch">
+                <span class="label-text">Enable Sudden Death?</span>
+                <button id="enableSuddenDeathToggleBtn" class="btn btn-sound off">Off</button>
+            </div>
+            <div id="suddenDeathThresholdContainer" class="hidden mt-2">
+                <label for="suddenDeathThresholdInput" class="label-text">Sudden Death After [X] Safe Rounds:</label>
+                <input type="number" id="suddenDeathThresholdInput" name="suddenDeathThresholdInput" min="1" max="10" value="3" class="input-field">
+            </div>
+            <button id="startGameBtn" class="btn btn-primary w-full mt-3">Let's Play!</button>
+            <button id="backToHomeBtn_setup" class="btn btn-secondary w-full mt-2">Back to Home</button>
+        </div>
+
+        <div id="gameScreen" class="screen space-y-4">
+            <div class="grid grid-cols-3 gap-2 text-center text-xs sm:text-sm mb-2 p-2 bg-gray-50 rounded-lg">
+                <div><h3 class="font-semibold">Round</h3><span id="currentRoundDisplay" class="text-blue-600 font-bold text-lg">1</span></div>
+                <div><h3 class="font-semibold">Guesses</h3><span id="guessesPerPlayerDisplay" class="text-blue-600 font-bold text-lg">1</span></div>
+                <div><h3 class="font-semibold">Safe Rounds</h3><span id="consecutiveSafeRoundsDisplay" class="text-blue-600 font-bold text-lg">0</span></div>
+            </div>
+            <div id="playersArea" class="grid grid-cols-2 gap-3"></div>
+            <div id="inputArea" class="space-y-3 p-3 bg-gray-50 rounded-lg shadow-inner">
+                <h3 id="inputAreaHeader" class="text-md font-semibold text-center"><span id="currentPlayerNameDisplay">Player 1</span>, <span id="inputActionPrompt">declare your coins</span>:</h3>
+                <div id="coinsHeldInputContainer">
+                    <label for="coinsHeldInput" class="label-text">Coins to Hold (0-3):</label>
+                    <select id="coinsHeldInput" class="input-field"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+                </div>
+                <div id="guessesInputArea" class="space-y-2 hidden"> 
+                </div>
+                <button id="submitChoiceBtn" class="btn btn-action w-full">Submit Choice</button>
+            </div>
+            <button id="resolveRoundBtn" class="btn btn-resolve w-full hidden">Resolve Round</button>
+            <div id="gameLogArea" class="mt-4 p-3 bg-gray-50 rounded-lg shadow-inner max-h-32 sm:max-h-40 overflow-y-auto">
+                <h3 class="text-sm font-semibold mb-1 text-gray-600">Game Log:</h3><div id="gameLogContent"></div>
+            </div>
+            <button id="quitGameBtn" class="btn btn-secondary w-full mt-2">Quit Game</button>
+        </div>
+
+        <div id="gameOverScreen" class="screen text-center space-y-6 py-8">
+            <h2 id="gameOverTitle" class="text-3xl font-bold">Game Over!</h2>
+            <p id="winnerMessage" class="text-xl text-gray-700"></p>
+            <div id="winnerCelebration" class="text-5xl">🎉</div>
+            <button id="playAgainBtn" class="btn btn-primary w-full text-lg">Play Again</button>
+            <button id="backToHomeBtn_gameover" class="btn btn-secondary w-full mt-2">Back to Home</button>
+        </div>
+    </div>
+
+    <div id="messageModal" class="modal">
+        <div class="modal-content"><p id="modalMessageText" class="text-lg mb-4"></p><button id="modalCloseBtn" class="btn btn-primary w-full">OK</button></div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const screens = {
+            home: document.getElementById('homeScreen'),
+            setup: document.getElementById('setupScreen'),
+            game: document.getElementById('gameScreen'),
+            gameOver: document.getElementById('gameOverScreen'),
+        };
+        const soundToggleBtn = document.getElementById('soundToggleBtn');
+        const announceGuessesToggleBtn = document.getElementById('announceGuessesToggleBtn');
+        const enableSuddenDeathToggleBtn = document.getElementById('enableSuddenDeathToggleBtn');
+        const suddenDeathThresholdContainer = document.getElementById('suddenDeathThresholdContainer');
+        const suddenDeathThresholdInput = document.getElementById('suddenDeathThresholdInput');
+
+        const initGameBtn = document.getElementById('initGameBtn');
+        const backToHomeBtnSetup = document.getElementById('backToHomeBtn_setup');
+        const startGameBtn = document.getElementById('startGameBtn');
+        const numPlayersInput = document.getElementById('numPlayers');
+        const playerNamesArea = document.getElementById('playerNamesArea');
+        const escalationTriggerInput = document.getElementById('escalationTrigger');
+        const gameModeSelect = document.getElementById('gameModeSelect');
+        const playersArea = document.getElementById('playersArea');
+        const inputArea = document.getElementById('inputArea');
+        const inputAreaHeader = document.getElementById('inputAreaHeader');
+        const currentPlayerNameDisplay = document.getElementById('currentPlayerNameDisplay');
+        const inputActionPrompt = document.getElementById('inputActionPrompt'); 
+        const coinsHeldInputContainer = document.getElementById('coinsHeldInputContainer');
+        const coinsHeldInput = document.getElementById('coinsHeldInput');
+        const guessesInputArea = document.getElementById('guessesInputArea');
+        const submitChoiceBtn = document.getElementById('submitChoiceBtn');
+        const resolveRoundBtn = document.getElementById('resolveRoundBtn');
+        const currentRoundDisplay = document.getElementById('currentRoundDisplay');
+        const guessesPerPlayerDisplay = document.getElementById('guessesPerPlayerDisplay');
+        const consecutiveSafeRoundsDisplay = document.getElementById('consecutiveSafeRoundsDisplay');
+        const gameLogContent = document.getElementById('gameLogContent');
+        const gameOverTitle = document.getElementById('gameOverTitle');
+        const winnerMessage = document.getElementById('winnerMessage');
+        const winnerCelebration = document.getElementById('winnerCelebration');
+        const playAgainBtn = document.getElementById('playAgainBtn');
+        const quitGameBtn = document.getElementById('quitGameBtn');
+        const backToHomeBtnGameOver = document.getElementById('backToHomeBtn_gameover'); 
+        const messageModal = document.getElementById('messageModal');
+        const modalMessageText = document.getElementById('modalMessageText');
+        const modalCloseBtn = document.getElementById('modalCloseBtn');
+
+
+        // Game State
+        let players = [];
+        let currentRound = 1;
+        let guessesPerPlayer = 1; 
+        let consecutiveSafeRounds = 0;
+        let escalationTriggerN = 2; 
+        let maxGuessesCap = 4; 
+        let gameMode = 'lastPlayerWins';
+        let gameState = 'HOME'; 
+        let gameSubState = ''; // 'COLLECTING_COINS' or 'COLLECTING_GUESSES'
+        let soundEnabled = false;
+        let announceGuessesLiveEnabled = false;
+        
+        let enableSuddenDeath = false; 
+        let suddenDeathThreshold = 3;  
+        let isNextRoundSuddenDeath = false; 
+
+        let activePlayersOrder = []; 
+        let currentPlayerOrderIndex = 0; 
+        let currentGuessSubTurn = 1; 
+        let guessesForThisSpecificRound = 1; 
+
+
+        let roundGuessesMade = new Set(); 
+        let gameLog = [];
+        const playerIcons = [ 
+            `<svg viewBox="0 0 100 100" fill="#60a5fa"><circle cx="50" cy="30" r="20"/><path d="M20 90 Q50 70 80 90 V90 H20 Z"/></svg>`,
+            `<svg viewBox="0 0 100 100" fill="#f472b6"><circle cx="50" cy="30" r="20"/><path d="M20 90 Q50 70 80 90 V90 H20 Z"/></svg>`,
+            `<svg viewBox="0 0 100 100" fill="#34d399"><circle cx="50" cy="30" r="20"/><path d="M20 90 Q50 70 80 90 V90 H20 Z"/></svg>`,
+            `<svg viewBox="0 0 100 100" fill="#fbbf24"><circle cx="50" cy="30" r="20"/><path d="M20 90 Q50 70 80 90 V90 H20 Z"/></svg>`,
+            `<svg viewBox="0 0 100 100" fill="#818cf8"><circle cx="50" cy="30" r="20"/><path d="M20 90 Q50 70 80 90 V90 H20 Z"/></svg>`,
+            `<svg viewBox="0 0 100 100" fill="#f87171"><circle cx="50" cy="30" r="20"/><path d="M20 90 Q50 70 80 90 V90 H20 Z"/></svg>`,
+            `<svg viewBox="0 0 100 100" fill="#a3e635"><circle cx="50" cy="30" r="20"/><path d="M20 90 Q50 70 80 90 V90 H20 Z"/></svg>`,
+            `<svg viewBox="0 0 100 100" fill="#2dd4bf"><circle cx="50" cy="30" r="20"/><path d="M20 90 Q50 70 80 90 V90 H20 Z"/></svg>`
+        ];
+
+        const synth = window.speechSynthesis;
+        function speak(text) { 
+            if (!soundEnabled || !synth) return;
+            synth.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            utterance.rate = 1.0; 
+            utterance.pitch = 1.0; 
+            setTimeout(() => { synth.speak(utterance); }, 50);
+        }
+
+        soundToggleBtn.addEventListener('click', () => { 
+            soundEnabled = !soundEnabled;
+            soundToggleBtn.textContent = soundEnabled ? 'Sound 🔊 On' : 'Sound 🔊 Off';
+            soundToggleBtn.classList.toggle('off', !soundEnabled);
+            if (soundEnabled) speak("Sound enabled.");
+            else synth.cancel();
+        });
+
+        announceGuessesToggleBtn.addEventListener('click', () => {
+            announceGuessesLiveEnabled = !announceGuessesLiveEnabled;
+            announceGuessesToggleBtn.textContent = announceGuessesLiveEnabled ? 'On' : 'Off';
+            announceGuessesToggleBtn.classList.toggle('off', !announceGuessesLiveEnabled);
+            if (soundEnabled) { 
+                 speak(announceGuessesLiveEnabled ? "Live guess announcement on." : "Live guess announcement off.");
+            }
+        });
+
+        enableSuddenDeathToggleBtn.addEventListener('click', () => {
+            enableSuddenDeath = !enableSuddenDeath;
+            enableSuddenDeathToggleBtn.textContent = enableSuddenDeath ? 'On' : 'Off';
+            enableSuddenDeathToggleBtn.classList.toggle('off', !enableSuddenDeath);
+            suddenDeathThresholdContainer.style.display = enableSuddenDeath ? 'block' : 'none';
+            if (soundEnabled) {
+                speak(enableSuddenDeath ? "Sudden Death mode enabled." : "Sudden Death mode disabled.");
+            }
+        });
+
+
+        function navigateTo(screenName) { 
+            Object.values(screens).forEach(screen => screen.classList.remove('active'));
+            screens[screenName].classList.add('active');
+            gameState = screenName.toUpperCase();
+             if (screenName === 'setup') {
+                generatePlayerNameInputs(parseInt(numPlayersInput.value));
+            }
+        }
+        initGameBtn.addEventListener('click', () => navigateTo('setup'));
+        backToHomeBtnSetup.addEventListener('click', () => navigateTo('home'));
+        quitGameBtn.addEventListener('click', () => {
+            if (confirm("Are you sure you want to quit the current game?")) {
+                speak("Game quit.");
+                navigateTo('home');
+            }
+        });
+        backToHomeBtnGameOver.addEventListener('click', () => navigateTo('home'));
+
+
+        function showModal(message) { 
+            modalMessageText.textContent = message;
+            messageModal.classList.add('active');
+            speak(message);
+        }
+        function hideModal() { 
+            messageModal.classList.remove('active');
+        }
+
+        function addToGameLog(message, alsoSpeak = true) {
+            gameLog.unshift(message); 
+            const logEntry = document.createElement('p');
+            logEntry.textContent = message;
+            logEntry.classList.add('game-log-entry');
+            if (gameLogContent.childNodes.length >= 20) { 
+                gameLogContent.removeChild(gameLogContent.lastChild);
+            }
+            gameLogContent.insertBefore(logEntry, gameLogContent.firstChild);
+            if (alsoSpeak) { 
+                speak(message);
+            }
+        }
+
+        function updateDisplays() { 
+            currentRoundDisplay.textContent = currentRound;
+            guessesPerPlayerDisplay.textContent = guessesForThisSpecificRound; 
+            consecutiveSafeRoundsDisplay.textContent = consecutiveSafeRounds;
+            renderPlayerCards();
+        }
+        
+        function getActivePlayers() { return players.filter(p => !p.isEliminated); }
+        function shuffleArray(array) { 
+             for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+        function getOrdinal(n) {
+            const s = ["th", "st", "nd", "rd"];
+            const v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
+        }
+
+        numPlayersInput.addEventListener('input', (e) => {
+            const count = parseInt(e.target.value);
+            generatePlayerNameInputs(count);
+        });
+
+        function generatePlayerNameInputs(count) {
+            playerNamesArea.innerHTML = ''; 
+            if (count >= 2 && count <= 8) {
+                for (let i = 0; i < count; i++) {
+                    const div = document.createElement('div');
+                    div.classList.add('mb-1'); 
+                    const label = document.createElement('label');
+                    label.htmlFor = `playerNameInput-${i}`;
+                    label.textContent = `P${i + 1} Name:`; 
+                    label.classList.add('label-text', 'text-xs');
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.id = `playerNameInput-${i}`;
+                    input.classList.add('name-input-field', 'p-1', 'text-sm'); 
+                    input.placeholder = `Name ${i+1}`;
+                    div.appendChild(label);
+                    div.appendChild(input);
+                    playerNamesArea.appendChild(div);
+                }
+            }
+        }
+
+        startGameBtn.addEventListener('click', () => {
+            const numChosenPlayers = parseInt(numPlayersInput.value);
+            escalationTriggerN = parseInt(escalationTriggerInput.value);
+            gameMode = gameModeSelect.value;
+            enableSuddenDeath = !enableSuddenDeathToggleBtn.classList.contains('off');
+            suddenDeathThreshold = parseInt(suddenDeathThresholdInput.value);
+
+
+            if (numChosenPlayers >= 2 && numChosenPlayers <= 8 && escalationTriggerN >=1 && suddenDeathThreshold >=1) {
+                initializeGame(numChosenPlayers);
+                navigateTo('game');
+                startNewRound(); 
+            } else {
+                showModal("Please enter valid setup values for all fields.");
+            }
+        });
+
+        function initializeGame(numChosenPlayers) {
+            players = [];
+            for (let i = 0; i < numChosenPlayers; i++) {
+                const nameInput = document.getElementById(`playerNameInput-${i}`);
+                let playerName = nameInput ? nameInput.value.trim() : '';
+                if (playerName === '') {
+                    playerName = `Player ${i + 1}`;
+                }
+                players.push({
+                    id: i + 1, name: playerName, icon: playerIcons[i % playerIcons.length],
+                    coinsHeld: -1, // Initialize to -1 to ensure it's set
+                    guessesThisRound: [], isEliminated: false,
+                });
+            }
+            currentRound = 1;
+            guessesPerPlayer = 1; 
+            consecutiveSafeRounds = 0;
+            isNextRoundSuddenDeath = false; 
+            gameLog = [];
+            gameLogContent.innerHTML = '';
+            const modeText = gameMode === 'lastPlayerWins' ? 'Last Player Wins' : 'Last Player Loses';
+            const liveAnnounceText = announceGuessesLiveEnabled ? "Live guess announcements ON." : "Live guess announcements OFF.";
+            const suddenDeathText = enableSuddenDeath ? `Sudden Death ON (after ${suddenDeathThreshold} safe rounds).` : "Sudden Death OFF.";
+            addToGameLog(`Game started. ${numChosenPlayers} players. Mode: ${modeText}. Normal Escalation after ${escalationTriggerN} safe rounds. ${liveAnnounceText} ${suddenDeathText}`);
+        }
+
+        function renderPlayerCards() { 
+            playersArea.innerHTML = '';
+            const currentActivePlayerToHighlight = ( (gameSubState === 'COLLECTING_COINS' || gameSubState === 'COLLECTING_GUESSES') && activePlayersOrder[currentPlayerOrderIndex]) ? activePlayersOrder[currentPlayerOrderIndex] : null;
+
+            players.forEach(player => {
+                const card = document.createElement('div');
+                card.classList.add('player-card', 'p-3', 'rounded-lg', 'shadow-md', 'text-center', 'flex', 'flex-col', 'justify-between', 'items-center', 'h-36');
+                
+                if (player.isEliminated) {
+                    card.classList.add('player-eliminated');
+                } else {
+                    card.classList.add('bg-slate-50');
+                    if (currentActivePlayerToHighlight && player.id === currentActivePlayerToHighlight.id) {
+                        card.classList.add('current-player-input');
+                    }
+                }
+                
+                let statusText = player.isEliminated ? (gameMode === 'lastPlayerLoses' ? 'Safe!' : 'Eliminated') : 'Active';
+                if (!player.isEliminated && gameSubState === 'COLLECTING_COINS') {
+                    if (player.coinsHeld === -1) {
+                        statusText = (currentActivePlayerToHighlight && player.id === currentActivePlayerToHighlight.id) ? "Declaring Coins" : "Waiting (Coins)";
+                    } else {
+                        statusText = "Coins Set!";
+                    }
+                }
+
+
+                let guessesDisplay = "";
+                if (!player.isEliminated) {
+                     if (gameSubState === 'COLLECTING_GUESSES') {
+                        const numGuessesMadeThisRound = player.guessesThisRound.length;
+                         if (currentActivePlayerToHighlight && player.id === currentActivePlayerToHighlight.id && numGuessesMadeThisRound < currentGuessSubTurn) {
+                             guessesDisplay = `Making ${getOrdinal(currentGuessSubTurn)} guess`;
+                         } else if (numGuessesMadeThisRound < guessesForThisSpecificRound) { 
+                             guessesDisplay = `Guesses: ${player.guessesThisRound.join(', ') || 'Waiting...'}`;
+                         } else if (numGuessesMadeThisRound === guessesForThisSpecificRound) { 
+                            guessesDisplay = `All guesses in!`;
+                        }
+                    } else if (gameState === 'RESOLUTION') { 
+                        guessesDisplay = `Held: ${player.coinsHeld}, Guessed: ${player.guessesThisRound.join(', ')}`;
+                    }
+                } else { 
+                     if (gameMode === 'lastPlayerLoses') { guessesDisplay = 'Safely out!'; } 
+                     else { guessesDisplay = 'Eliminated from play.'; }
+                }
+
+                card.innerHTML = `
+                    <div class="player-icon">${player.icon}</div>
+                    <div class="w-full">
+                        <h4 class="font-semibold text-sm truncate" title="${player.name}">${player.name}</h4>
+                        <p class="text-xs text-gray-500">${statusText}</p>
+                        ${guessesDisplay ? `<p class="text-xs text-blue-600 mt-1 truncate">${guessesDisplay}</p>` : ''}
+                    </div>
+                `;
+                playersArea.appendChild(card);
+            });
+        }
+        
+        function startNewRound() {
+            gameState = 'INPUT'; 
+            gameSubState = 'COLLECTING_COINS'; 
+            const roundStartMsg = `Round ${currentRound} starting. All players, prepare to declare coins.`;
+            addToGameLog(roundStartMsg);
+            
+            if (isNextRoundSuddenDeath) {
+                guessesForThisSpecificRound = Math.min(3, maxGuessesCap); 
+                addToGameLog(`SUDDEN DEATH ROUND ACTIVATED! Up to ${guessesForThisSpecificRound} guesses per player this round after coins are declared.`);
+                isNextRoundSuddenDeath = false; 
+            } else {
+                guessesForThisSpecificRound = guessesPerPlayer; 
+            }
+            
+            activePlayersOrder = shuffleArray([...getActivePlayers()]); 
+            currentPlayerOrderIndex = 0;
+            roundGuessesMade.clear();
+
+            players.forEach(p => {
+                if (!p.isEliminated) { 
+                    p.guessesThisRound = []; 
+                    p.coinsHeld = -1; 
+                }
+            });
+            
+            resolveRoundBtn.classList.add('hidden');
+            inputArea.classList.remove('hidden');
+            submitChoiceBtn.classList.remove('hidden');
+            submitChoiceBtn.textContent = "Submit Choice"; // Reset button text
+
+            if (activePlayersOrder.length > 0) {
+                preparePlayerInput(); 
+            } else {
+                endGame(); 
+            }
+            updateDisplays(); 
+        }
+
+        function preparePlayerInput() {
+            const currentPlayer = activePlayersOrder[currentPlayerOrderIndex];
+            currentPlayerNameDisplay.textContent = currentPlayer.name;
+            let announcement = "";
+
+            if (gameSubState === 'COLLECTING_COINS') {
+                inputActionPrompt.innerHTML = `declare your coins`;
+                coinsHeldInputContainer.style.display = 'block';
+                guessesInputArea.classList.add('hidden');
+                coinsHeldInput.value = "0"; 
+                submitChoiceBtn.textContent = "Submit Coins";
+                announcement = `${currentPlayer.name}, it's your turn to declare coins.`;
+                setTimeout(() => coinsHeldInput.focus(), 100);
+            } else if (gameSubState === 'COLLECTING_GUESSES') {
+                inputActionPrompt.innerHTML = `make your <span class="text-blue-600 font-bold">${getOrdinal(currentGuessSubTurn)}</span> guess`;
+                coinsHeldInputContainer.style.display = 'none';
+                guessesInputArea.classList.remove('hidden');
+                submitChoiceBtn.textContent = "Submit Guess";
+                
+                guessesInputArea.innerHTML = ''; 
+                const maxPossibleTotal = getActivePlayers().length * 3;
+                const minPossibleTotal = 0;
+                const guessDiv = document.createElement('div');
+                guessDiv.innerHTML = `
+                    <label for="currentGuessVal" class="label-text">Your ${getOrdinal(currentGuessSubTurn)} Guess (Range: ${minPossibleTotal}-${maxPossibleTotal}):</label>
+                    <input type="number" id="currentGuessVal" min="${minPossibleTotal}" max="${maxPossibleTotal}" class="input-field guess-input" required>
+                `;
+                guessesInputArea.appendChild(guessDiv);
+                announcement = `${currentPlayer.name}, it's your turn to make your ${getOrdinal(currentGuessSubTurn)} guess.`;
+                setTimeout(() => document.getElementById('currentGuessVal')?.focus(), 100);
+            }
+            speak(announcement);
+            updateDisplays();
+        }
+
+
+        submitChoiceBtn.addEventListener('click', () => {
+            if (gameState !== 'INPUT' || currentPlayerOrderIndex >= activePlayersOrder.length) return;
+            const currentPlayer = activePlayersOrder[currentPlayerOrderIndex];
+
+            if (gameSubState === 'COLLECTING_COINS') {
+                currentPlayer.coinsHeld = parseInt(coinsHeldInput.value);
+                addToGameLog(`${currentPlayer.name} has declared their coins. (Secret)`, false); 
+                
+                currentPlayerOrderIndex++;
+                if (currentPlayerOrderIndex < activePlayersOrder.length) {
+                    preparePlayerInput();
+                } else {
+                    addToGameLog("All players have declared coins. Moving to guessing phase.");
+                    gameSubState = 'COLLECTING_GUESSES';
+                    currentGuessSubTurn = 1;
+                    activePlayersOrder = shuffleArray([...getActivePlayers()]); 
+                    currentPlayerOrderIndex = 0;
+                    preparePlayerInput();
+                }
+            } else if (gameSubState === 'COLLECTING_GUESSES') {
+                const guessInput = document.getElementById('currentGuessVal');
+                const guessVal = parseInt(guessInput.value);
+                
+                const maxPossibleTotal = getActivePlayers().length * 3;
+                const minPossibleTotal = 0;
+                let errorMessage = "";
+
+                if (isNaN(guessVal) || guessVal < minPossibleTotal || guessVal > maxPossibleTotal) {
+                    errorMessage = `Your guess is invalid. Must be between ${minPossibleTotal} and ${maxPossibleTotal}.`;
+                } else if (roundGuessesMade.has(guessVal)) {
+                    errorMessage = `Guess ${guessVal} has already been made this round globally. Please choose another.`;
+                }
+
+                if (errorMessage) {
+                    showModal(errorMessage); 
+                    return;
+                }
+
+                currentPlayer.guessesThisRound.push(guessVal);
+                roundGuessesMade.add(guessVal);
+                
+                if (announceGuessesLiveEnabled) {
+                    speak(`${currentPlayer.name} guessed ${guessVal}.`);
+                }
+                addToGameLog(`${currentPlayer.name} submitted their ${getOrdinal(currentGuessSubTurn)} guess. (Value: ${guessVal})`, !announceGuessesLiveEnabled); 
+                
+                currentPlayerOrderIndex++;
+                if (currentPlayerOrderIndex < activePlayersOrder.length) {
+                    preparePlayerInput();
+                } else {
+                    currentPlayerOrderIndex = 0;
+                    currentGuessSubTurn++;
+                    if (currentGuessSubTurn > guessesForThisSpecificRound) {
+                        allGuessesForRoundSubmitted();
+                    } else {
+                        activePlayersOrder = shuffleArray([...getActivePlayers()]); 
+                        addToGameLog(`Order re-shuffled. Now taking ${getOrdinal(currentGuessSubTurn)} guess from all players.`);
+                        preparePlayerInput();
+                    }
+                }
+            }
+            renderPlayerCards(); 
+        });
+        
+        function allGuessesForRoundSubmitted() { 
+            gameState = 'RESOLUTION'; 
+            gameSubState = ''; 
+            inputArea.classList.add('hidden');
+            submitChoiceBtn.classList.add('hidden');
+            resolveRoundBtn.classList.remove('hidden');
+            addToGameLog("All guesses submitted for the round. Ready to resolve."); 
+            updateDisplays(); 
+        }
+
+        resolveRoundBtn.addEventListener('click', () => {
+            if (gameState !== 'RESOLUTION') return;
+            
+            const playersInThisResolution = players.filter(p => p.coinsHeld !== -1 && !p.isEliminated);
+
+
+            let actualTotalCoins = 0;
+            playersInThisResolution.forEach(player => {
+                 if (!player.isEliminated) actualTotalCoins += player.coinsHeld; 
+            });
+
+            addToGameLog(`Resolving Round ${currentRound}. Actual total coins held: ${actualTotalCoins}.`); 
+            let playersEliminatedThisRoundCount = 0;
+
+            playersInThisResolution.forEach(player => { 
+                if (player.isEliminated) return; 
+
+                let eliminatedThisGuess = false;
+                let playerSummaryForLog = `${player.name} held ${player.coinsHeld}, and guessed ${player.guessesThisRound.join(', ')}. `;
+
+                for (const guess of player.guessesThisRound) {
+                    if (guess === actualTotalCoins) {
+                        eliminatedThisGuess = true;
+                        break;
+                    }
+                }
+                if (eliminatedThisGuess) {
+                    player.isEliminated = true; 
+                    playersEliminatedThisRoundCount++;
+                    const outcomeMsg = gameMode === 'lastPlayerLoses' ? 'is SAFE and out of the game!' : 'is ELIMINATED!';
+                    addToGameLog(playerSummaryForLog + outcomeMsg); 
+                    const card = Array.from(playersArea.children).find(c => c.innerHTML.includes(`${player.name}`));
+                    if (card) {
+                        card.classList.add('player-eliminated'); 
+                        setTimeout(() => card.style.transform = 'scale(0.9) rotate(-5deg)', 100);
+                    }
+                } else {
+                     addToGameLog(playerSummaryForLog + 'is SAFE and remains in the game.'); 
+                }
+            });
+
+            if (playersEliminatedThisRoundCount > 0) {
+                consecutiveSafeRounds = 0;
+                guessesPerPlayer = 1; 
+                isNextRoundSuddenDeath = false; 
+                const affectedMsg = playersEliminatedThisRoundCount === 1 ? "One player affected." : `${playersEliminatedThisRoundCount} players affected.`;
+                addToGameLog(`${affectedMsg} Persistent guesses per player reset to 1.`); 
+            } else { 
+                consecutiveSafeRounds++;
+                addToGameLog("No eliminations this round (All Safe)."); 
+
+                if (enableSuddenDeath && consecutiveSafeRounds >= suddenDeathThreshold) {
+                    isNextRoundSuddenDeath = true; 
+                    addToGameLog(`Sudden Death threshold met! Next round will be Sudden Death. Consecutive safe rounds counter for Sudden Death reset.`);
+                    consecutiveSafeRounds = 0; 
+                } else if (consecutiveSafeRounds >= escalationTriggerN) { 
+                    guessesPerPlayer = Math.min(guessesPerPlayer + 1, maxGuessesCap); 
+                    addToGameLog(`Normal Escalation! Persistent guesses per player for next round is now ${guessesPerPlayer}.`);
+                    consecutiveSafeRounds = 0; 
+                }
+            }
+            
+            updateDisplays(); 
+            resolveRoundBtn.classList.add('hidden'); 
+
+            const remainingPlayers = getActivePlayers();
+            if (gameMode === 'lastPlayerWins') {
+                if (remainingPlayers.length <= 1) {
+                    setTimeout(() => endGame(remainingPlayers.length === 1 ? remainingPlayers[0] : null), 1500);
+                } else {
+                    setTimeout(() => { currentRound++; startNewRound(); }, 2500); 
+                }
+            } else { 
+                if (remainingPlayers.length === 1) { 
+                    setTimeout(() => endGame(remainingPlayers[0]), 1500);
+                } else if (remainingPlayers.length === 0) { 
+                    setTimeout(() => endGame(null), 1500);
+                } else { 
+                    setTimeout(() => { currentRound++; startNewRound(); }, 2500);
+                }
+            }
+        });
+
+        function endGame(finalPlayer) { 
+            gameState = 'GAMEOVER'; 
+            gameSubState = '';
+            navigateTo('gameOver');
+            let finalMessage = "";
+
+            if (gameMode === 'lastPlayerWins') {
+                if (finalPlayer) {
+                    gameOverTitle.textContent = "👑 Champion! 👑";
+                    finalMessage = `${finalPlayer.name} is the SpoofR Winner!`;
+                    winnerCelebration.innerHTML = finalPlayer.icon;
+                } else {
+                    gameOverTitle.textContent = "It's a Draw!";
+                    finalMessage = "All players were eliminated simultaneously.";
+                    winnerCelebration.innerHTML = "🤝";
+                }
+            } else { 
+                const activeAtEnd = getActivePlayers(); 
+                if (finalPlayer && activeAtEnd.length === 1 && activeAtEnd[0].id === finalPlayer.id) { 
+                    gameOverTitle.textContent = "👎 Loser! 👎";
+                    finalMessage = `${finalPlayer.name} is the Loser (buys the rounds)!`;
+                    winnerCelebration.innerHTML = finalPlayer.icon; 
+                    setTimeout(() => winnerCelebration.innerHTML = '💸', 100); 
+                } else { 
+                    gameOverTitle.textContent = "😅 Everyone's Safe! 😅";
+                    finalMessage = "No loser this time! All remaining players were eliminated or the game ended without a single loser.";
+                    winnerCelebration.innerHTML = "🥳";
+                }
+            }
+            winnerMessage.textContent = finalMessage;
+            addToGameLog(`Game Over! ${finalMessage}`); 
+            renderPlayerCards(); 
+        }
+
+        playAgainBtn.addEventListener('click', () => {
+            navigateTo('setup'); 
+        });
+        
+        modalCloseBtn.addEventListener('click', hideModal);
+        
+        generatePlayerNameInputs(parseInt(numPlayersInput.value));
+        navigateTo('home');
+
+    </script>
+</body>
+</html>
