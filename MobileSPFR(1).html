@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpoofR - Web3 Guessing Game</title>
+    <style>
+        /* Base styles for the body, ensuring it's a flexible container */
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #1a202c; /* bg-gray-900 */
+            color: #fff; /* text-white */
+            min-height: 100vh; /* min-h-screen to fill the viewport */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem; /* p-4 */
+        }
+
+        /* Responsive typography for headings */
+        h1 {
+            font-size: 2.5rem; /* Slightly smaller for mobile */
+            font-weight: bold; /* font-bold */
+            margin-bottom: 1.5rem; /* mb-8 */
+        }
+        h2 {
+            font-size: 1.6rem; /* text-3xl */
+            font-weight: bold; /* font-bold */
+            margin-bottom: 1rem; /* mb-4 */
+        }
+        h3 {
+            font-size: 1.1rem; /* text-xl */
+            margin-bottom: 1rem; /* mb-4 */
+        }
+        p {
+            font-size: 1rem; /* text-lg */
+            margin-bottom: 1rem; /* mb-4 */
+        }
+        
+        /* Main container with fluid width and centered content */
+        .container {
+            max-width: 28rem; /* max-w-md */
+            width: 100%; /* w-full */
+        }
+
+        /* Touch-friendly buttons */
+        .button {
+            padding: 0.9rem 1.8rem; /* Larger padding for easy tapping */
+            border-radius: 0.25rem; /* rounded */
+            font-weight: bold; /* font-bold */
+            font-size: 1rem; /* readable font size */
+            cursor: pointer;
+            border: none;
+            color: #fff; /* text-white */
+            margin: 0.5rem; /* space-x-2 for spacing */
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .button:active {
+            transform: scale(0.95); /* Visual feedback on touch/click */
+        }
+
+        /* Button color styles */
+        .button-blue { background-color: #3182ce; }
+        .button-blue:hover { background-color: #2b6cb0; }
+        .button-gray { background-color: #4a5568; }
+        .button-gray:hover { background-color: #2d3748; }
+        .button-red { background-color: #e53e3e; }
+        .button-red:hover { background-color: #c53030; }
+        .button-disabled {
+            background-color: #2d3748; /* bg-gray-800 */
+            cursor: not-allowed; /* cursor-not-allowed */
+            opacity: 0.6;
+        }
+        
+        /* Pulse animation for the start button */
+        .pulse { animation: pulse 0.5s ease-in-out; }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        /* Coin styling for visual representation */
+        .coin {
+            display: inline-block;
+            width: 24px; /* larger for mobile */
+            height: 24px;
+            background: gold;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
+
+        /* Guess grid layout */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); /* Use auto-fit for flexible columns */
+            gap: 0.5rem; /* gap-2 */
+            margin-bottom: 1rem; /* mb-4 */
+        }
+        
+        /* Log and flexible layouts */
+        .log {
+            background-color: #2d3748; /* bg-gray-800 */
+            padding: 1rem; /* p-4 */
+            border-radius: 0.25rem; /* rounded */
+            max-height: 16rem; /* max-h-64 */
+            overflow-y: auto; /* overflow-y-auto */
+            font-size: 0.875rem; /* text-sm */
+        }
+        .flex {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 1rem; /* space-x-4 */
+        }
+
+        /* Input styling for forms */
+        .input, select {
+            padding: 0.75rem; /* larger for mobile */
+            background-color: #2d3748; /* bg-gray-800 */
+            border-radius: 0.25rem; /* rounded */
+            color: #fff;
+            border: none;
+            width: 100%; /* w-full */
+            margin-top: 0.25rem; /* mt-1 */
+            font-size: 1rem; /* larger for mobile */
+        }
+        label {
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 500; /* font-medium */
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem; /* mb-4 */
+        }
+        .checkbox-label input {
+            margin-right: 0.5rem; /* mr-2 */
+            width: 1.2rem; /* larger for mobile */
+            height: 1.2rem;
+        }
+        
+        /* Rules and prompts */
+        .rules {
+            background-color: #2d3748; /* bg-gray-800 */
+            padding: 1rem; /* p-4 */
+            border-radius: 0.25rem; /* rounded */
+            margin-bottom: 1rem; /* mb-4 */
+            font-size: 0.875rem; /* text-sm */
+            max-width: 28rem; /* max-w-md */
+        }
+        .pass-prompt {
+            font-size: 1rem; /* text-base */
+            color: #60a5fa; /* blue-400 */
+            margin-top: 0.5rem; /* mt-2 */
+            font-style: italic;
+        }
+        .error {
+            color: #e53e3e; /* text-red-600 */
+            font-size: 0.875rem; /* text-sm */
+            margin-top: 0.25rem; /* mt-1 */
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+    <script>
+        // Global state variables for the game
+        let gameState = 'home';
+        let players = [];
+        let numPlayers = 2;
+        let escalationTrigger = 3; 
+        let gameMode = 'win';
+        let announceGuesses = false;
+        let suddenDeath = false;
+        let suddenDeathRounds = 20;
+        let enableAudio = true;
+        let enableVoice = false;
+        let currentRound = 1;
+        let safeRounds = 0;
+        let safeRoundsSinceEscalation = 0;
+        let maxCoinsPerPlayer = 3; 
+        let currentPlayerIndex = 0;
+        let coinsHeld = {};
+        let guesses = {};
+        let gameLog = [];
+
+        // Web Audio API setup for sound effects
+        const audioCtx = typeof AudioContext !== 'undefined' ? new (window.AudioContext || window.webkitAudioContext)() : null;
+        
+        // SpeechSynthesis for voice announcements
+        const synth = typeof speechSynthesis !== 'undefined' ? speechSynthesis : null;
+
+        /**
+         * Plays a simple sound effect using the Web Audio API.
+         * @param {number} frequency - The frequency of the sound in Hz.
+         * @param {string} type - The waveform type ('sine', 'square', etc.).
+         * @param {number} duration - The duration of the sound in seconds.
+         * @param {number} volume - The volume from 0.0 to 1.0.
+         */
+        function playSound(frequency, type = 'sine', duration = 0.2, volume = 0.3) {
+            if (!audioCtx || !enableAudio) return;
+            try {
+                if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.type = type;
+                oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + duration);
+            } catch (e) {
+                console.warn('Audio playback failed:', e.message);
+            }
+        }
+
+        /**
+         * Announces text using the Web Speech API.
+         * @param {string} text - The text to be spoken.
+         */
+        function speak(text) {
+            if (!synth || !enableVoice) return;
+            try {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+                utterance.volume = 0.8;
+                synth.speak(utterance);
+            } catch (e) {
+                console.warn('Voice announcement failed:', e.message);
+            }
+        }
+
+        /**
+         * Shuffles an array in place using the Fisher-Yates algorithm.
+         * @param {Array} array - The array to shuffle.
+         * @returns {Array} The shuffled array.
+         */
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        /**
+         * Gets the number of currently active players.
+         * @returns {number} The count of active players.
+         */
+        function getActivePlayersCount() {
+            return players.filter(p => p.active).length;
+        }
+
+        /**
+         * Validates that all player names are unique and updates UI accordingly.
+         */
+        function validateNames() {
+            const playerNames = Array.from({ length: numPlayers }, (_, i) => {
+                const nameInput = document.getElementById(`playerName${i + 1}`);
+                return nameInput && nameInput.value.trim() ? nameInput.value.trim() : `Player ${i + 1}`;
+            });
+            const uniqueNames = new Set(playerNames);
+            const errorDiv = document.getElementById('nameError');
+            const playButton = document.querySelector('.button-blue');
+            if (uniqueNames.size !== playerNames.length) {
+                if (errorDiv) { errorDiv.textContent = 'Player names must be unique. Please update duplicate names.'; }
+                if (playButton) { playButton.classList.add('button-disabled'); playButton.disabled = true; }
+                return false;
+            } else {
+                if (errorDiv) { errorDiv.textContent = ''; }
+                if (playButton) { playButton.classList.remove('button-disabled'); playButton.disabled = false; }
+                return true;
+            }
+        }
+        
+        /**
+         * A custom modal replacement for alert() and confirm() to avoid browser popups in the iframe.
+         * @param {string} message - The message to display.
+         * @param {string} type - 'alert' or 'confirm'.
+         */
+        function showModal(message, type = 'alert') {
+            const modalContainer = document.createElement('div');
+            modalContainer.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background-color: rgba(0,0,0,0.7); display: flex;
+                justify-content: center; align-items: center; z-index: 1000;
+            `;
+            const modalContent = document.createElement('div');
+            modalContent.style.cssText = `
+                background-color: #2d3748; padding: 2rem; border-radius: 0.5rem;
+                max-width: 90%; color: #fff; text-align: center;
+            `;
+            const messageEl = document.createElement('p');
+            messageEl.textContent = message;
+            messageEl.style.marginBottom = '1rem';
+            modalContent.appendChild(messageEl);
+
+            const buttonContainer = document.createElement('div');
+            const okButton = document.createElement('button');
+            okButton.textContent = 'OK';
+            okButton.className = 'button button-blue';
+            okButton.onclick = () => modalContainer.remove();
+            buttonContainer.appendChild(okButton);
+
+            if (type === 'confirm') {
+                const cancelButton = document.createElement('button');
+                cancelButton.textContent = 'Cancel';
+                cancelButton.className = 'button button-gray';
+                cancelButton.onclick = () => { modalContainer.remove(); };
+                buttonContainer.appendChild(cancelButton);
+            }
+
+            modalContent.appendChild(buttonContainer);
+            modalContainer.appendChild(modalContent);
+            document.body.appendChild(modalContainer);
+        }
+
+        /**
+         * Renders the current game state to the DOM.
+         */
+        function render() {
+            const app = document.getElementById('app');
+            app.innerHTML = '';
+
+            if (gameState === 'home') {
+                app.innerHTML = `
+                    <div class="flex flex-col items-center justify-center">
+                        <h1>SpoofR</h1>
+                        <h3>The ultimate game of bluff and luck!</h3>
+                        <div class="rules">
+                            <h3>How to Play SpoofR</h3>
+                            <p><strong>Objective:</strong> Hide 0–3 coins (🪙) and guess the total coins held by all active players. Be the last player remaining (or lose, depending on mode).</p>
+                            <p><strong>Setup:</strong> Choose 2–8 players, enter unique names (or use default Player 1, etc.), set safe rounds (2–20) for Escalating Guesses, select "Last Player Wins" or "Last Player Loses," and toggle options. Starting player is random, with order rotating each round.</p>
+                            <p><strong>Gameplay:</strong></p>
+                            <ul>
+                                <li><strong>Coin Phase:</strong> Each active player picks 0–3 coins, hidden from others.</li>
+                                <li><strong>Guess Phase:</strong> Each active player guesses the total coins. Guesses must be unique.</li>
+                                <li><strong>Resolution:</strong> Total coins revealed. Correct guesses eliminate players.</li>
+                            </ul>
+                            <p><strong>Escalating Guesses:</strong> After N safe rounds (no eliminations), the number of coins players can hold is reduced, narrowing the range of possible outcomes.</p>
+                            <p><strong>Sudden Death (optional):</strong> After X safe rounds, the first correct guess wins/loses.</p>
+                            <p><strong>End:</strong> Game ends with one player left (or none). Last player wins or loses per game mode.</p>
+                        </div>
+                        <button class="button button-blue pulse" onclick="startNewGame()">Start New Game</button>
+                    </div>
+                `;
+            } else if (gameState === 'setup') {
+                app.innerHTML = `
+                    <div class="container">
+                        <h2>Game Setup</h2>
+                        <div>
+                            <label>Number of Players (2–8):</label>
+                            <input class="input" type="number" id="numPlayers" min="2" max="8" value="${numPlayers}" onchange="updatePlayerNameInputs()">
+                        </div>
+                        <div id="playerNames">
+                            ${Array.from({ length: numPlayers }, (_, i) => `
+                                <div>
+                                    <label>Player ${i + 1} Name (required, must be unique):</label>
+                                    <input class="input" type="text" id="playerName${i + 1}" placeholder="Enter unique name (e.g., Player ${i + 1})" value="${players[i]?.name || ''}" required oninput="validateNames()">
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div id="nameError" class="error"></div>
+                        <div>
+                            <label>Escalation Trigger (2–20 safe rounds):</label>
+                            <input class="input" type="number" id="escalationTrigger" min="2" max="20" value="${escalationTrigger}">
+                        </div>
+                        <div>
+                            <label>Game Mode:</label>
+                            <select class="input" id="gameMode">
+                                <option value="win" ${gameMode === 'win' ? 'selected' : ''}>Last Player Wins</option>
+                                <option value="lose" ${gameMode === 'lose' ? 'selected' : ''}>Last Player Loses</option>
+                            </select>
+                        </div>
+                        <div class="checkbox-label">
+                            <input type="checkbox" id="announceGuesses" ${announceGuesses ? 'checked' : ''}>
+                            <label for="announceGuesses">Announce Guesses Live?</label>
+                        </div>
+                        <div class="checkbox-label">
+                            <input type="checkbox" id="suddenDeath" ${suddenDeath ? 'checked' : ''}>
+                            <label for="suddenDeath">Enable Sudden Death?</label>
+                        </div>
+                        ${suddenDeath ? `
+                            <div>
+                                <label>Sudden Death After (10–30 safe rounds):</label>
+                                <input class="input" type="number" id="suddenDeathRounds" min="10" max="30" value="${suddenDeathRounds}">
+                            </div>
+                        ` : ''}
+                        <div class="checkbox-label">
+                            <input type="checkbox" id="enableAudio" ${enableAudio ? 'checked' : ''}>
+                            <label for="enableAudio">Enable Sound Effects?</label>
+                        </div>
+                        <div class="checkbox-label">
+                            <input type="checkbox" id="enableVoice" ${enableVoice ? 'checked' : ''}>
+                            <label for="enableVoice">Enable Voice Announcements?</label>
+                        </div>
+                        <div class="flex">
+                            <button class="button button-blue" onclick="setupGame()">Let's Play!</button>
+                            <button class="button button-gray" onclick="gameState = 'home'; render()">Back to Home</button>
+                        </div>
+                    </div>
+                `;
+                validateNames();
+            } else if (gameState === 'playing' || gameState === 'guessing') {
+                const currentPlayer = players[currentPlayerIndex];
+                const { min, max } = getGuessRange();
+                const usedGuesses = Object.values(guesses);
+                app.innerHTML = `
+                    <div class="container">
+                        <h2>Round ${currentRound}</h2>
+                        <p>Safe Rounds: ${safeRounds}</p>
+                        <p>Safe Rounds Since Escalation: ${safeRoundsSinceEscalation}</p>
+                        <p>Max Coins Per Player: ${maxCoinsPerPlayer}</p>
+                        <p>Active Players: ${players.filter(p => p.active).map(p => p.name).join(', ')}</p>
+                        ${gameState === 'playing' ? `
+                            <div>
+                                <p>${currentPlayer.name}, declare your coins (0-${maxCoinsPerPlayer}):</p>
+                                <div class="flex">
+                                    ${Array.from({ length: maxCoinsPerPlayer + 1 }, (_, coins) => `
+                                        <button class="button ${coinsHeld[currentPlayer.id] === coins ? 'button-blue' : 'button-gray'}" onclick="submitCoins(${coins})">
+                                            ${coins === 0 ? '0' : '🪙'.repeat(coins)}
+                                        </button>
+                                    `).join('')}
+                                </div>
+                                <p class="pass-prompt">Pass the phone/device to ${currentPlayer.name} for their turn.</p>
+                            </div>
+                        ` : ''}
+                        ${gameState === 'guessing' ? `
+                            <div>
+                                <p>${currentPlayer.name}, guess the total coins (${min}–${max}):</p>
+                                <div class="grid">
+                                    ${Array.from({ length: max + 1 }, (_, i) => i)
+                                        .filter(guess => guess >= min && guess <= max)
+                                        .map(guess => `
+                                            <button class="button ${usedGuesses.includes(guess) ? 'button-disabled' : 'button-gray'}" 
+                                                ${usedGuesses.includes(guess) ? 'disabled' : ''} 
+                                                onclick="submitGuess(${guess})">
+                                                ${guess}
+                                            </button>
+                                        `).join('')}
+                                </div>
+                                <p class="pass-prompt">Pass the phone/device to ${currentPlayer.name} for their turn.</p>
+                            </div>
+                        ` : ''}
+                        <div>
+                            <h3>Game Log:</h3>
+                            <div class="log">
+                                ${gameLog.map(log => `<div>${log}</div>`).join('')}
+                            </div>
+                        </div>
+                        <button class="button button-red" onclick="gameState = 'home'; render()">Quit Game</button>
+                    </div>
+                `;
+                if (enableVoice && gameState === 'playing') {
+                    speak(`${currentPlayer.name}, declare your coins.`);
+                } else if (enableVoice && gameState === 'guessing') {
+                    speak(`${currentPlayer.name}, guess the total coins from ${min} to ${max}.`);
+                }
+            } else if (gameState === 'gameover') {
+                const winner = players.find(p => p.active);
+                app.innerHTML = `
+                    <div class="flex flex-col items-center justify-center">
+                        <h2 class="pulse">Game Over!</h2>
+                        <p>🎉 ${winner ? winner.name : 'No one'} ${gameMode === 'win' ? 'wins' : 'loses'}!</p>
+                        <div class="flex">
+                            <button class="button button-blue" onclick="startNewGame()">Play Again</button>
+                            <button class="button button-gray" onclick="gameState = 'home'; render()">Back to Home</button>
+                        </div>
+                    </div>
+                `;
+                if (enableAudio) { playSound(winner ? 440 : 220, 'triangle', 0.5, 0.4); }
+                if (enableVoice) { speak(`${winner ? winner.name : 'No one'} ${gameMode === 'win' ? 'wins' : 'loses'}!`); }
+            }
+        }
+
+        /**
+         * Dynamically updates the player name input fields based on the number of players.
+         */
+        function updatePlayerNameInputs() {
+            numPlayers = Math.max(2, Math.min(8, parseInt(document.getElementById('numPlayers').value) || 2));
+            const playerNamesDiv = document.getElementById('playerNames');
+            if (playerNamesDiv) {
+                const existingNames = players.map(p => p.name);
+                playerNamesDiv.innerHTML = Array.from({ length: numPlayers }, (_, i) => `
+                    <div>
+                        <label>Player ${i + 1} Name (required, must be unique):</label>
+                        <input class="input" type="text" id="playerName${i + 1}" placeholder="Enter unique name (e.g., Player ${i + 1})" value="${existingNames[i] || ''}" required oninput="validateNames()">
+                    </div>
+                `).join('');
+                validateNames();
+            }
+        }
+
+        /**
+         * Resets the game state and renders the setup screen.
+         */
+        function startNewGame() {
+            gameState = 'setup';
+            players = [];
+            numPlayers = 2;
+            escalationTrigger = 3;
+            gameMode = 'win';
+            announceGuesses = false;
+            suddenDeath = false;
+            suddenDeathRounds = 20;
+            enableAudio = true;
+            enableVoice = false;
+            currentRound = 1;
+            safeRounds = 0;
+            safeRoundsSinceEscalation = 0;
+            maxCoinsPerPlayer = 3; 
+            currentPlayerIndex = 0;
+            coinsHeld = {};
+            guesses = {};
+            gameLog = [];
+            if (audioCtx && audioCtx.state === 'suspended') { audioCtx.resume(); }
+            render();
+        }
+
+        /**
+         * Initializes the game with the chosen settings.
+         */
+        function setupGame() {
+            numPlayers = Math.max(2, Math.min(8, parseInt(document.getElementById('numPlayers').value) || 2));
+            escalationTrigger = Math.max(2, Math.min(20, parseInt(document.getElementById('escalationTrigger').value) || 3));
+            gameMode = document.getElementById('gameMode').value;
+            announceGuesses = document.getElementById('announceGuesses').checked;
+            suddenDeath = document.getElementById('suddenDeath').checked;
+            enableAudio = document.getElementById('enableAudio').checked;
+            enableVoice = document.getElementById('enableVoice').checked;
+            if (suddenDeath) {
+                suddenDeathRounds = Math.max(10, Math.min(30, parseInt(document.getElementById('suddenDeathRounds')?.value) || 20));
+            }
+            
+            const playerNames = Array.from({ length: numPlayers }, (_, i) => {
+                const nameInput = document.getElementById(`playerName${i + 1}`);
+                let name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : `Player ${i + 1}`;
+                if (!name || name === '') { name = `Player ${i + 1}`; }
+                return name;
+            });
+
+            const uniqueNames = new Set(playerNames);
+            if (uniqueNames.size !== playerNames.length) {
+                showModal('Player names must be unique. Please update duplicate names.');
+                return;
+            }
+
+            players = playerNames.map((name, i) => ({
+                id: i + 1,
+                name,
+                active: true
+            }));
+            players = shuffleArray(players);
+            gameState = 'playing';
+            gameLog = [`Game started with ${numPlayers} players! Starting order: ${players.map(p => p.name).join(', ')}`];
+            if (enableVoice) { speak(`Game started with ${numPlayers} players! Starting order: ${players.map(p => p.name).join(', ')}`); }
+            render();
+        }
+
+        /**
+         * Submits the number of coins held by the current player and moves to the next player.
+         * @param {number} coins - The number of coins the player chose.
+         */
+        function submitCoins(coins) {
+            const currentPlayer = players[currentPlayerIndex];
+            coinsHeld[currentPlayer.id] = coins;
+            gameLog.push(`${currentPlayer.name} has chosen their coins.`);
+            if (enableAudio) { playSound(440, 'square', 0.1, 0.2); }
+            if (enableVoice) { speak(`${currentPlayer.name} has chosen their coins.`); }
+
+            const activePlayers = players.filter(p => p.active);
+            const submittedCoinIds = new Set(Object.keys(coinsHeld).map(id => parseInt(id)));
+
+            const remainingPlayers = activePlayers.filter(p => !submittedCoinIds.has(p.id));
+
+            if (remainingPlayers.length > 0) {
+                const nextPlayer = remainingPlayers[0];
+                currentPlayerIndex = players.findIndex(p => p.id === nextPlayer.id);
+            } else {
+                gameState = 'guessing';
+                const nextTurnOrder = shuffleArray(activePlayers.map(p => p.id));
+                currentPlayerIndex = players.findIndex(p => p.id === nextTurnOrder[0]);
+            }
+            render();
+        }
+
+        /**
+         * Submits the guess of the current player and moves to the next.
+         * @param {number} guess - The guessed total of coins.
+         */
+        function submitGuess(guess) {
+            const currentPlayer = players[currentPlayerIndex];
+            guesses[currentPlayer.id] = guess;
+            if (announceGuesses) {
+                gameLog.push(`${currentPlayer.name} guessed ${guess}.`);
+                if (enableVoice) { speak(`${currentPlayer.name} guessed ${guess}.`); }
+            }
+            if (enableAudio) { playSound(880, 'square', 0.1, 0.2); }
+            const activePlayers = players.filter(p => p.active);
+            const submittedGuessIds = new Set(Object.keys(guesses).map(id => parseInt(id)));
+
+            const remainingPlayers = activePlayers.filter(p => !submittedGuessIds.has(p.id));
+
+            if (remainingPlayers.length > 0) {
+                const nextPlayer = remainingPlayers[0];
+                currentPlayerIndex = players.findIndex(p => p.id === nextPlayer.id);
+            } else {
+                resolveRound();
+            }
+            render();
+        }
+
+        /**
+         * Resolves the round by checking guesses and eliminating players.
+         */
+        function resolveRound() {
+            const totalCoins = Object.values(coinsHeld).reduce((sum, coins) => sum + coins, 0);
+            let eliminated = false;
+            let eliminatedPlayers = [];
+            const originalMaxCoins = 3;
+
+            const activePlayersBeforeResolution = players.filter(p => p.active);
+
+            players = players.map(player => {
+                const guess = guesses[player.id];
+                if (guess === totalCoins && player.active) {
+                    eliminated = true;
+                    eliminatedPlayers.push(player.name);
+                    return { ...player, active: false };
+                }
+                return player;
+            });
+
+            gameLog.push(`Round ${currentRound}: Total coins were ${totalCoins}.`);
+            Object.entries(coinsHeld).forEach(([id, coins]) => {
+                const player = players.find(p => p.id === parseInt(id));
+                gameLog.push(`${player.name}: ${'🪙'.repeat(coins)}`);
+            });
+            Object.entries(guesses).forEach(([id, guess]) => {
+                const player = players.find(p => p.id === parseInt(id));
+                gameLog.push(`${player.name} guessed ${guess}.`);
+            });
+            
+            if (eliminated) {
+                gameLog.push(`${eliminatedPlayers.join(', ')} guessed correctly and were eliminated!`);
+                if (enableVoice) { speak(`${eliminatedPlayers.join(', ')} guessed correctly and were eliminated!`); }
+                if (enableAudio) { playSound(220, 'sawtooth', 0.3, 0.3); }
+                safeRoundsSinceEscalation = 0;
+                if (maxCoinsPerPlayer < originalMaxCoins) {
+                    maxCoinsPerPlayer = originalMaxCoins;
+                    gameLog.push(`Elimination occurred! Max coins per player has been reset to ${maxCoinsPerPlayer}.`);
+                    if (enableVoice) { speak(`Max coins per player has been reset to ${maxCoinsPerPlayer}.`); }
+                }
+            } else {
+                safeRounds++;
+                safeRoundsSinceEscalation++;
+                gameLog.push('No one was eliminated this round (safe round).');
+                if (enableVoice) { speak('No one was eliminated this round.'); }
+            }
+
+            if (safeRoundsSinceEscalation >= escalationTrigger) {
+                if (maxCoinsPerPlayer > 1) {
+                    maxCoinsPerPlayer--;
+                    gameLog.push(`Escalation triggered! Players can now only hold a maximum of ${maxCoinsPerPlayer} coins.`);
+                    if (enableVoice) { speak(`Escalation triggered! The maximum coins a player can hold is now ${maxCoinsPerPlayer}.`); }
+                    safeRoundsSinceEscalation = 0; 
+                } else {
+                    gameLog.push(`Escalation cannot proceed further, max coins is already 1.`);
+                }
+            }
+
+            const activePlayers = players.filter(p => p.active);
+            if (activePlayers.length <= 1) {
+                const winner = activePlayers[0];
+                gameLog.push(`${winner ? winner.name : 'No one'} ${gameMode === 'win' ? 'wins' : 'loses'}!`);
+                gameState = 'gameover';
+            } else {
+                currentRound++;
+                coinsHeld = {};
+                guesses = {};
+                
+                const nextTurnOrder = shuffleArray(activePlayers.map(p => p.id));
+                currentPlayerIndex = players.findIndex(p => p.id === nextTurnOrder[0]);
+
+                gameState = 'playing';
+
+                if (suddenDeath && safeRounds >= suddenDeathRounds && activePlayers.length > 1) {
+                    gameLog.push(`Sudden Death! First correct guess ${gameMode === 'win' ? 'wins' : 'loses'}.`);
+                    if (enableVoice) { speak(`Sudden Death! First correct guess ${gameMode === 'win' ? 'wins' : 'loses'}.`); }
+                    const firstCorrect = activePlayersBeforeResolution.find( p => guesses[p.id] === totalCoins );
+                    if (firstCorrect) {
+                        players = players.map(p => p.id === firstCorrect.id ? p : { ...p, active: false });
+                        gameLog.push(`${firstCorrect.name} guessed correctly in Sudden Death and ${gameMode === 'win' ? 'wins' : 'loses'}!`);
+                        if (enableVoice) { speak(`${firstCorrect.name} guessed correctly in Sudden Death and ${gameMode === 'win' ? 'wins' : 'loses'}.`); }
+                        gameState = 'gameover';
+                    }
+                }
+            }
+            render();
+        }
+
+        /**
+         * Calculates the valid range for a player's guess.
+         * @returns {object} An object with `min` and `max` values for the guess range.
+         */
+        function getGuessRange() {
+            const activeCount = getActivePlayersCount();
+            const min = 0;
+            const max = activeCount * maxCoinsPerPlayer;
+            return { min, max };
+        }
+
+        render();
+    </script>
+</body>
+</html>
